@@ -1,40 +1,32 @@
+from flask import Flask, request, send_from_directory
 import os
-import base64
-import time
-from flask import Flask, request
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-app.config['UPLOAD_FOLDER'] = 'uploads'
+UPLOAD_FOLDER = "uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'photo' not in request.form or 'text' not in request.form:
-        return 'Invalid request', 400
+@app.route("/")
+def index():
+    return send_from_directory(".", "index.html")
 
-    photo = request.form['photo']
-    text = request.form['text']
+@app.route("/upload", methods=["POST"])
+def upload():
+    text_data = request.form.get("text")
+    image_data = request.files.get("image")
 
-    if photo == '' or text == '':
-        return 'No photo or text provided', 400
+    if not text_data or not image_data:
+        return "Both text and image data are required.", 400
 
-    img_data = base64.b64decode(photo.split(',')[1])
-    filename = secure_filename(f"photo_{time.time()}.jpeg")
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    image_filename = os.path.join(app.config["UPLOAD_FOLDER"], image_data.filename)
+    image_data.save(image_filename)
 
-    with open(filepath, 'wb') as f:
-        f.write(img_data)
+    with open(os.path.join(app.config["UPLOAD_FOLDER"], f"{image_data.filename}.txt"), "w") as text_file:
+        text_file.write(text_data)
 
-    with open(os.path.join(app.config['UPLOAD_FOLDER'], f"{filename}_text.txt"), 'w') as f:
-        f.write(text)
+    return f"Image and text successfully uploaded and saved as {image_data.filename} and {image_data.filename}.txt", 200
 
-    return 'Upload successful', 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
-
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
