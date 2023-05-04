@@ -1,32 +1,49 @@
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, jsonify, render_template
 import os
+from werkzeug.utils import secure_filename
+from datetime import datetime
 
-app = Flask(__name__)
-UPLOAD_FOLDER = "uploads"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app = Flask(__name__, template_folder='.')
+app.config['UPLOAD_FOLDER'] = './uploads'
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
 
-@app.route("/")
-def index():
-    return send_from_directory(".", "index.html")
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    text_data = request.form.get("text")
-    image_data = request.files.get("image")
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-    if not text_data or not image_data:
-        return "Both text and image data are required.", 400
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file'}), 400
+    image = request.files['image']
+    text = request.form.get('text', '')
 
-    image_filename = os.path.join(app.config["UPLOAD_FOLDER"], image_data.filename)
-    image_data.save(image_filename)
+    if image.filename == '':
+        return jsonify({'error': 'No image selected'}), 400
 
-    with open(os.path.join(app.config["UPLOAD_FOLDER"], f"{image_data.filename}.txt"), "w") as text_file:
-        text_file.write(text_data)
+    if image and allowed_file(image.filename):
+        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H-%M-%S.%fZ')
+        file_ext = os.path.splitext(image.filename)[1]
+        filename = f'{timestamp}{file_ext}'
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        image.save(image_path)
 
-    return f"Image and text successfully uploaded and saved as {image_data.filename} and {image_data.filename}.txt", 200
+        # Save text data alongside the image
+        text_filename = f'{timestamp}.txt'
+        text_path = os.path.join(app.config['UPLOAD_FOLDER'], text_filename)
+        with open(text_path, 'w') as text_file:
+            text_file.write(text)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+        return jsonify({'message': 'Image and text uploaded successfully'}), 200
+    else:
+        return jsonify({'error': 'Invalid file format'}), 400
+
+@app.route('/', methods=['GET'])
+def serve_frontend():
+    return render_template('index.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
